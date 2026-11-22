@@ -320,7 +320,7 @@
       font-variant-numeric: tabular-nums;
     }
 
-    .limiter-row {
+    .toggle-row {
       margin-top: 14px;
       padding-top: 12px;
       border-top: 1px solid var(--border);
@@ -330,18 +330,18 @@
       gap: 12px;
     }
 
-    .limiter-text {
+    .toggle-text {
       display: flex;
       flex-direction: column;
       gap: 2px;
     }
 
-    .limiter-title {
+    .toggle-title {
       font-size: 0.9rem;
       font-weight: 600;
     }
 
-    .limiter-sub {
+    .toggle-sub {
       font-size: 0.76rem;
       color: var(--muted);
     }
@@ -548,7 +548,7 @@
   <main class="app">
     <header>
       <div class="brand">
-        <h1>QuickVol <span class="app-ver">v1.0.4</span></h1>
+        <h1>QuickVol <span class="app-ver">v1.0.5</span></h1>
         <button id="installBtn" class="install-btn" type="button">Install</button>
       </div>
       <button id="enginePill" class="engine-pill" type="button" title="Tap to preload FFmpeg engine">
@@ -598,10 +598,21 @@
         </div>
       </div>
 
-      <div class="limiter-row">
-        <div class="limiter-text">
-          <span class="limiter-title">Soft Limiter (Anti-Clip)</span>
-          <span class="limiter-sub">Prevents harsh distortion when boosting above 100%</span>
+      <div class="toggle-row">
+        <div class="toggle-text">
+          <span class="toggle-title">Denoiser (Static &amp; Hum)</span>
+          <span class="toggle-sub">Cuts low hum in preview + full FFT hiss reduction on export</span>
+        </div>
+        <label class="switch">
+          <input id="denoiseToggle" type="checkbox" checked />
+          <span class="switch-track"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-text">
+          <span class="toggle-title">Soft Limiter (Anti-Clip)</span>
+          <span class="toggle-sub">Prevents harsh distortion when boosting above 100%</span>
         </div>
         <label class="switch">
           <input id="limiterToggle" type="checkbox" checked />
@@ -706,7 +717,7 @@
 
   <script>
     (() => {
-      const APP_VERSION = 'v1.0.4';
+      const APP_VERSION = 'v1.0.5';
       const CORE_JS_URL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js';
       const CORE_WASM_URL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm';
       const WASM_CACHE_NAME = 'quickvol-ffmpeg-0.12.10';
@@ -724,6 +735,7 @@
       const pctText = document.getElementById('pctText');
       const dbText = document.getElementById('dbText');
       const resetBtn = document.getElementById('resetBtn');
+      const denoiseToggle = document.getElementById('denoiseToggle');
       const limiterToggle = document.getElementById('limiterToggle');
       const exportBtn = document.getElementById('exportBtn');
       const progressBox = document.getElementById('progressBox');
@@ -790,6 +802,7 @@
       // Web Audio state
       let audioCtx = null;
       let sourceNode = null;
+      let highpassNode = null;
       let gainNode = null;
       let limiterNode = null;
 
@@ -910,6 +923,12 @@
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
             audioCtx = new AudioCtx();
             sourceNode = audioCtx.createMediaElementSource(videoEl);
+
+            highpassNode = audioCtx.createBiquadFilter();
+            highpassNode.type = 'highpass';
+            highpassNode.frequency.value = 80;
+            highpassNode.Q.value = 0.707;
+
             gainNode = audioCtx.createGain();
 
             limiterNode = audioCtx.createDynamicsCompressor();
@@ -919,7 +938,6 @@
             limiterNode.attack.value = 0.003;
             limiterNode.release.value = 0.05;
 
-            sourceNode.connect(gainNode);
             log('Web Audio graph initialized');
           }
           if (audioCtx.state === 'suspended') {
@@ -932,22 +950,31 @@
       }
 
       function applyAudioSettings() {
-        if (!audioCtx || !gainNode || !limiterNode) return;
+        if (!audioCtx || !sourceNode || !highpassNode || !gainNode || !limiterNode) return;
         const pct = Number(volSlider.value);
         const gain = pctToGain(pct);
+        const useDenoise = denoiseToggle.checked;
         const useLimiter = limiterToggle.checked && pct > 100;
 
         gainNode.gain.setTargetAtTime(gain, audioCtx.currentTime, 0.015);
 
+        try { sourceNode.disconnect(); } catch (_) {}
+        try { highpassNode.disconnect(); } catch (_) {}
         try { gainNode.disconnect(); } catch (_) {}
         try { limiterNode.disconnect(); } catch (_) {}
 
-        if (useLimiter) {
-          gainNode.connect(limiterNode);
-          limiterNode.connect(audioCtx.destination);
-        } else {
-          gainNode.connect(audioCtx.destination);
+        let lastNode = sourceNode;
+        if (useDenoise) {
+          lastNode.connect(highpassNode);
+          lastNode = highpassNode;
         }
+        lastNode.connect(gainNode);
+        lastNode = gainNode;
+        if (useLimiter) {
+          lastNode.connect(limiterNode);
+          lastNode = limiterNode;
+        }
+        lastNode.connect(audioCtx.destination);
       }
 
       volSlider.addEventListener('input', () => {
@@ -956,6 +983,10 @@
           if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
           applyAudioSettings();
         }
+      });
+
+      denoiseToggle.addEventListener('change', () => {
+        if (audioCtx) applyAudioSettings();
       });
 
       limiterToggle.addEventListener('change', () => {
@@ -1206,10 +1237,27 @@
           const pct = Number(volSlider.value);
           const gain = pctToGain(pct);
           const gainStr = gain.toFixed(4);
+          const useDenoise = denoiseToggle.checked;
           const useLimiter = limiterToggle.checked && pct > 100;
 
+          const filters = [];
+          if (pct === 0) {
+            filters.push('volume=0');
+          } else {
+            if (useDenoise) {
+              // Remove low hum & steady static before boosting gain
+              filters.push('highpass=f=80', 'afftdn=nr=10:nf=-40:tn=1');
+            }
+            if (pct !== 100) {
+              filters.push(`volume=${gainStr}:precision=float`);
+            }
+            if (useLimiter) {
+              filters.push('alimiter=limit=0.95:attack=5:release=50:level=disabled');
+            }
+          }
+
           let args;
-          if (pct === 100) {
+          if (filters.length === 0) {
             args = [
               '-i', 'input.mp4',
               '-map', '0:v?',
@@ -1220,17 +1268,13 @@
               'output.mp4'
             ];
           } else {
-            const volFilter = pct === 0 ? 'volume=0' : `volume=${gainStr}:precision=float`;
-            const af = useLimiter
-              ? `${volFilter},alimiter=limit=0.95:attack=5:release=50:level=disabled`
-              : volFilter;
             args = [
               '-i', 'input.mp4',
               '-map', '0:v?',
               '-map', '0:a?',
               '-map_metadata', '0',
               '-c:v', 'copy',
-              '-af', af,
+              '-af', filters.join(','),
               '-c:a', 'aac',
               '-b:a', '192k',
               '-movflags', '+faststart',
@@ -1238,7 +1282,8 @@
             ];
           }
 
-          log(`Exporting at ${pct}% (${formatDb(pct)}, gain=${gainStr}x, limiter=${useLimiter})`);
+          log(`Exporting at ${pct}% (${formatDb(pct)}, denoise=${useDenoise}, limiter=${useLimiter})`);
+          if (filters.length) log(`Audio filter: ${filters.join(',')}`);
           setProgress('Reading video...', 0.05);
           const inputBuffer = await currentFile.arrayBuffer();
 
