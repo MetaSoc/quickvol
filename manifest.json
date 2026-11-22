@@ -1,0 +1,20 @@
+{
+  "id": "./",
+  "name": "QuickVol",
+  "short_name": "QuickVol",
+  "description": "Fast local MP4 volume booster with zero video re-encoding",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0d12",
+  "theme_color": "#0b0d12",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

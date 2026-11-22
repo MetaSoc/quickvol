@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d12" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>QuickVol</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <style>
+    :root {
+      --bg: #0b0d12;
+      --surface: #141821;
+      --surface-2: #1c2230;
+      --border: #273043;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #3b82f6;
+      --accent-press: #2563eb;
+      --boost: #f59e0b;
+      --ok: #22c55e;
+      --err: #ef4444;
+      --radius: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      overflow-x: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Roboto, sans-serif;
+      touch-action: manipulation;
+    }
+
+    body {
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      padding:
+        max(14px, env(safe-area-inset-top))
+        14px
+        max(20px, env(safe-area-inset-bottom))
+        14px;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 520px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px 2px 4px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .badge {
+      font-size: 0.72rem;
+      color: var(--muted);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+
+    .install-btn {
+      display: none;
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+
+    /* 1. File Picker */
+    .picker-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 56px;
+      padding: 12px 16px;
+      background: var(--surface-2);
+      border: 1.5px dashed var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .picker-label:active {
+      background: #232b3d;
+      border-color: var(--accent);
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    .file-meta {
+      margin-top: 10px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      display: none;
+      justify-content: space-between;
+      gap: 8px;
+      word-break: break-word;
+    }
+
+    .file-meta.visible {
+      display: flex;
+    }
+
+    .warn-note {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      color: #fcd34d;
+      font-size: 0.8rem;
+      display: none;
+    }
+
+    .warn-note.visible {
+      display: block;
+    }
+
+    /* 2. Video Player */
+    .player-card {
+      display: none;
+      padding: 10px;
+    }
+
+    .player-card.visible {
+      display: block;
+    }
+
+    video {
+      width: 100%;
+      max-height: 44dvh;
+      display: block;
+      background: #000;
+      border-radius: 10px;
+    }
+
+    /* 3. Volume Controls */
+    .vol-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .readout {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .pct {
+      font-size: 1.75rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+
+    .pct.boosted {
+      color: var(--boost);
+    }
+
+    .db {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--muted);
+      background: var(--surface-2);
+      padding: 4px 9px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .reset-btn {
+      min-height: 42px;
+      padding: 0 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .reset-btn:active {
+      background: #273147;
+    }
+
+    .slider-wrap {
+      padding: 8px 0 6px;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      outline: none;
+      margin: 0;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #fff;
+      border: 3px solid var(--accent);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+      cursor: pointer;
+    }
+
+    input[type="range"].boosted::-webkit-slider-thumb {
+      border-color: var(--boost);
+    }
+
+    .scale-marks {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+      font-size: 0.74rem;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .limiter-row {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .limiter-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .limiter-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .limiter-sub {
+      font-size: 0.76rem;
+      color: var(--muted);
+    }
+
+    .switch {
+      position: relative;
+      width: 50px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .switch-track {
+      position: absolute;
+      inset: 0;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .switch-track::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: transform 0.15s, background 0.15s;
+    }
+
+    .switch input:checked + .switch-track {
+      background: rgba(59, 130, 246, 0.25);
+      border-color: var(--accent);
+    }
+
+    .switch input:checked + .switch-track::after {
+      transform: translateX(22px);
+      background: var(--accent);
+    }
+
+    /* 4. Export */
+    .export-btn {
+      width: 100%;
+      min-height: 56px;
+      border: none;
+      border-radius: var(--radius);
+      background: var(--accent);
+      color: #fff;
+      font-size: 1.05rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+
+    .export-btn:active:not(:disabled) {
+      background: var(--accent-press);
+    }
+
+    .export-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .progress-box {
+      display: none;
+      margin-top: 12px;
+    }
+
+    .progress-box.visible {
+      display: block;
+    }
+
+    .progress-top {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+      gap: 8px;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      background: var(--surface-2);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      width: 0%;
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.12s linear;
+    }
+
+    .status-msg {
+      margin-top: 10px;
+      font-size: 0.84rem;
+      color: var(--muted);
+      display: none;
+      word-break: break-word;
+    }
+
+    .status-msg.visible {
+      display: block;
+    }
+
+    .status-msg.ok {
+      color: var(--ok);
+    }
+
+    .status-msg.err {
+      color: var(--err);
+    }
+
+    .save-again {
+      display: none;
+      margin-top: 10px;
+      width: 100%;
+      min-height: 46px;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .save-again.visible {
+      display: flex;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div class="brand">
+        <h1>QuickVol</h1>
+        <span class="badge">MP4 · No Video Re-encode</span>
+      </div>
+      <button id="installBtn" class="install-btn" type="button">Install App</button>
+    </header>
+
+    <!-- 1. File Picker -->
+    <section class="card">
+      <label class="picker-label" for="fileInput" id="pickerLabel">
+        <span id="pickerText">Select MP4 Video</span>
+      </label>
+      <input id="fileInput" type="file" accept="video/mp4,video/*" />
+      <div class="file-meta" id="fileMeta">
+        <span id="fileName"></span>
+        <span id="fileInfo"></span>
+      </div>
+      <div class="warn-note" id="durationWarn">
+        Clip is longer than 60s. Export still works, but may take more RAM/time on mobile.
+      </div>
+    </section>
+
+    <!-- 2. Video Player -->
+    <section class="card player-card" id="playerCard">
+      <video id="videoEl" controls playsinline webkit-playsinline preload="metadata"></video>
+    </section>
+
+    <!-- 3. Volume Controls -->
+    <section class="card">
+      <div class="vol-header">
+        <div class="readout">
+          <span class="pct" id="pctText">100%</span>
+          <span class="db" id="dbText">0.0 dB</span>
+        </div>
+        <button class="reset-btn" id="resetBtn" type="button">Reset 100%</button>
+      </div>
+
+      <div class="slider-wrap">
+        <input id="volSlider" type="range" min="0" max="300" step="5" value="100" aria-label="Volume percentage" />
+        <div class="scale-marks">
+          <span>0%</span>
+          <span>100%</span>
+          <span>200%</span>
+          <span>300%</span>
+        </div>
+      </div>
+
+      <div class="limiter-row">
+        <div class="limiter-text">
+          <span class="limiter-title">Soft Limiter (Anti-Clip)</span>
+          <span class="limiter-sub">Prevents harsh distortion when boosting above 100%</span>
+        </div>
+        <label class="switch">
+          <input id="limiterToggle" type="checkbox" checked />
+          <span class="switch-track"></span>
+        </label>
+      </div>
+    </section>
+
+    <!-- 4. Export -->
+    <section class="card">
+      <button class="export-btn" id="exportBtn" type="button" disabled>Export MP4</button>
+
+      <div class="progress-box" id="progressBox">
+        <div class="progress-top">
+          <span id="progressLabel">Preparing...</span>
+          <span id="progressPct">0%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+      </div>
+
+      <div class="status-msg" id="statusMsg"></div>
+      <a class="save-again" id="saveAgainLink" download>Tap here if download didn't start</a>
+    </section>
+  </main>
+
+  <!-- Inline FFmpeg Web Worker (avoids cross-origin wrapper bugs) -->
+  <script id="ffmpeg-worker" type="javascript/worker">
+    let ffmpeg = null;
+
+    self.onmessage = async (e) => {
+      const { type } = e.data;
+      try {
+        if (type === 'INIT') {
+          const { coreJsUrl, wasmUrl } = e.data;
+          importScripts(coreJsUrl);
+          if (typeof self.createFFmpegCore !== 'function') {
+            throw new Error('FFmpeg core failed to initialize.');
+          }
+          const config = btoa(JSON.stringify({ wasmURL: wasmUrl }));
+          ffmpeg = await self.createFFmpegCore({
+            mainScriptUrlOrBlob: coreJsUrl + '#' + config,
+            locateFile: (path) => (path.endsWith('.wasm') ? wasmUrl : path)
+          });
+          ffmpeg.setProgress(({ progress, time }) => {
+            self.postMessage({ type: 'PROGRESS', progress, time });
+          });
+          self.postMessage({ type: 'READY' });
+        } else if (type === 'RUN') {
+          if (!ffmpeg) throw new Error('FFmpeg engine not ready.');
+          const { inputBuffer, inputName, outputName, args } = e.data;
+          const logs = [];
+          ffmpeg.setLogger(({ message }) => {
+            if (message) {
+              logs.push(message);
+              if (logs.length > 35) logs.shift();
+            }
+          });
+
+          ffmpeg.FS.writeFile(inputName, new Uint8Array(inputBuffer));
+          ffmpeg.exec(...args);
+          const ret = ffmpeg.ret;
+          ffmpeg.reset();
+
+          if (ret !== 0) {
+            try { ffmpeg.FS.unlink(inputName); } catch (_) {}
+            try { ffmpeg.FS.unlink(outputName); } catch (_) {}
+            throw new Error('FFmpeg error (' + ret + '): ' + logs.slice(-4).join(' | '));
+          }
+
+          const outView = ffmpeg.FS.readFile(outputName);
+          // Copy out of WASM linear memory before unlinking & transferring
+          const outCopy = new Uint8Array(outView.byteLength);
+          outCopy.set(outView);
+
+          try { ffmpeg.FS.unlink(inputName); } catch (_) {}
+          try { ffmpeg.FS.unlink(outputName); } catch (_) {}
+
+          self.postMessage({ type: 'DONE', buffer: outCopy.buffer }, [outCopy.buffer]);
+        }
+      } catch (err) {
+        self.postMessage({
+          type: 'ERROR',
+          message: err && err.message ? err.message : String(err)
+        });
+      }
+    };
+  </script>
+
+  <script>
+    (() => {
+      const CORE_JS_URL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js';
+      const CORE_WASM_URL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm';
+      const WASM_CACHE_NAME = 'quickvol-ffmpeg-0.12.10';
+
+      // DOM refs
+      const fileInput = document.getElementById('fileInput');
+      const pickerText = document.getElementById('pickerText');
+      const fileMeta = document.getElementById('fileMeta');
+      const fileNameEl = document.getElementById('fileName');
+      const fileInfoEl = document.getElementById('fileInfo');
+      const durationWarn = document.getElementById('durationWarn');
+      const playerCard = document.getElementById('playerCard');
+      const videoEl = document.getElementById('videoEl');
+      const volSlider = document.getElementById('volSlider');
+      const pctText = document.getElementById('pctText');
+      const dbText = document.getElementById('dbText');
+      const resetBtn = document.getElementById('resetBtn');
+      const limiterToggle = document.getElementById('limiterToggle');
+      const exportBtn = document.getElementById('exportBtn');
+      const progressBox = document.getElementById('progressBox');
+      const progressLabel = document.getElementById('progressLabel');
+      const progressPct = document.getElementById('progressPct');
+      const progressFill = document.getElementById('progressFill');
+      const statusMsg = document.getElementById('statusMsg');
+      const saveAgainLink = document.getElementById('saveAgainLink');
+      const installBtn = document.getElementById('installBtn');
+
+      // State
+      let currentFile = null;
+      let currentVideoUrl = null;
+      let currentDownloadUrl = null;
+      let videoDuration = 0;
+      let isExporting = false;
+
+      // Web Audio state
+      let audioCtx = null;
+      let sourceNode = null;
+      let gainNode = null;
+      let limiterNode = null;
+
+      // Worker state
+      let worker = null;
+      let workerReady = false;
+      let workerInitPromise = null;
+
+      // --- PWA Registration & Install Prompt ---
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      }
+
+      let deferredPrompt = null;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        installBtn.style.display = 'inline-block';
+      });
+
+      installBtn.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        installBtn.style.display = 'none';
+      });
+
+      // --- Volume Readouts & Slider Visuals ---
+      function formatDb(pct) {
+        if (pct === 0) return '-∞ dB';
+        if (pct === 100) return '0.0 dB';
+        const db = 20 * Math.log10(pct / 100);
+        return (db > 0 ? '+' : '') + db.toFixed(1) + ' dB';
+      }
+
+      function updateSliderUI() {
+        const pct = Number(volSlider.value);
+        const boosted = pct > 100;
+        const fillPct = (pct / 300) * 100;
+        const fillColor = boosted ? 'var(--boost)' : 'var(--accent)';
+
+        pctText.textContent = pct + '%';
+        pctText.classList.toggle('boosted', boosted);
+        dbText.textContent = formatDb(pct);
+
+        volSlider.classList.toggle('boosted', boosted);
+        volSlider.style.background =
+          `linear-gradient(to right, ${fillColor} 0%, ${fillColor} ${fillPct}%, var(--surface-2) ${fillPct}%, var(--surface-2) 100%)`;
+      }
+
+      // --- Web Audio Live Preview ---
+      function ensureAudioGraph() {
+        if (!audioCtx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioCtx();
+          sourceNode = audioCtx.createMediaElementSource(videoEl);
+          gainNode = audioCtx.createGain();
+
+          // Soft-knee anti-clip limiter matching FFmpeg alimiter behavior
+          limiterNode = audioCtx.createDynamicsCompressor();
+          limiterNode.threshold.value = -2;
+          limiterNode.knee.value = 6;
+          limiterNode.ratio.value = 20;
+          limiterNode.attack.value = 0.003;
+          limiterNode.release.value = 0.05;
+
+          sourceNode.connect(gainNode);
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume().catch(() => {});
+        }
+        applyAudioSettings();
+      }
+
+      function applyAudioSettings() {
+        if (!audioCtx || !gainNode || !limiterNode) return;
+        const pct = Number(volSlider.value);
+        const gain = pct / 100;
+        const useLimiter = limiterToggle.checked && pct > 100;
+
+        gainNode.gain.setTargetAtTime(gain, audioCtx.currentTime, 0.015);
+
+        try { gainNode.disconnect(); } catch (_) {}
+        try { limiterNode.disconnect(); } catch (_) {}
+
+        if (useLimiter) {
+          gainNode.connect(limiterNode);
+          limiterNode.connect(audioCtx.destination);
+        } else {
+          gainNode.connect(audioCtx.destination);
+        }
+      }
+
+      volSlider.addEventListener('input', () => {
+        updateSliderUI();
+        if (audioCtx) {
+          if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+          applyAudioSettings();
+        }
+      });
+
+      limiterToggle.addEventListener('change', () => {
+        if (audioCtx) applyAudioSettings();
+      });
+
+      resetBtn.addEventListener('click', () => {
+        volSlider.value = '100';
+        updateSliderUI();
+        if (audioCtx) applyAudioSettings();
+      });
+
+      videoEl.addEventListener('play', ensureAudioGraph);
+
+      // --- File Selection ---
+      function formatBytes(bytes) {
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+    
