@@ -548,7 +548,7 @@
   <main class="app">
     <header>
       <div class="brand">
-        <h1>QuickVol <span class="app-ver">v1.0.3</span></h1>
+        <h1>QuickVol <span class="app-ver">v1.0.4</span></h1>
         <button id="installBtn" class="install-btn" type="button">Install</button>
       </div>
       <button id="enginePill" class="engine-pill" type="button" title="Tap to preload FFmpeg engine">
@@ -588,12 +588,13 @@
       </div>
 
       <div class="slider-wrap">
-        <input id="volSlider" type="range" min="0" max="300" step="5" value="100" aria-label="Volume percentage" />
+        <input id="volSlider" type="range" min="0" max="200" step="5" value="100" aria-label="Volume percentage" />
         <div class="scale-marks">
           <span>0%</span>
+          <span>50%</span>
           <span>100%</span>
+          <span>150%</span>
           <span>200%</span>
-          <span>300%</span>
         </div>
       </div>
 
@@ -705,7 +706,7 @@
 
   <script>
     (() => {
-      const APP_VERSION = 'v1.0.3';
+      const APP_VERSION = 'v1.0.4';
       const CORE_JS_URL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js';
       const CORE_WASM_URL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm';
       const WASM_CACHE_NAME = 'quickvol-ffmpeg-0.12.10';
@@ -867,11 +868,11 @@
 
       // --- Volume Mapping & Readouts ---
       // 0%..100%: linear attenuation (50% = -6.0 dB)
-      // 100%..300%: +12 dB per +100% (200% = +12.0 dB / 4x, 300% = +24.0 dB / 15.85x)
+      // 100%..200%: +30 dB per +100% (150% = +15.0 dB / 5.6x, 200% = +30.0 dB / 31.6x)
       function pctToDb(pct) {
         if (pct <= 0) return -Infinity;
         if (pct <= 100) return 20 * Math.log10(pct / 100);
-        return ((pct - 100) / 100) * 12;
+        return ((pct - 100) / 100) * 30;
       }
 
       function pctToGain(pct) {
@@ -890,7 +891,7 @@
       function updateSliderUI() {
         const pct = Number(volSlider.value);
         const boosted = pct > 100;
-        const fillPct = (pct / 300) * 100;
+        const fillPct = (pct / 200) * 100;
         const fillColor = boosted ? 'var(--boost)' : 'var(--accent)';
 
         pctText.textContent = pct + '%';
@@ -1005,6 +1006,10 @@
         clearStatus();
         progressBox.classList.remove('visible');
         durationWarn.classList.remove('visible');
+
+        volSlider.value = '100';
+        updateSliderUI();
+        if (audioCtx) applyAudioSettings();
 
         const isLikelyVideo =
           !file.type ||
