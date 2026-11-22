@@ -63,13 +63,15 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 2px 2px 4px;
+      gap: 8px;
+      padding: 2px 2px 0;
     }
 
     .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
+      min-width: 0;
     }
 
     .brand h1 {
@@ -79,13 +81,40 @@
       letter-spacing: -0.02em;
     }
 
-    .badge {
-      font-size: 0.72rem;
+    .engine-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.74rem;
+      font-weight: 600;
       color: var(--muted);
       background: var(--surface);
       border: 1px solid var(--border);
-      padding: 3px 8px;
+      padding: 6px 10px;
       border-radius: 999px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .engine-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .engine-pill.cached .engine-dot,
+    .engine-pill.ready .engine-dot {
+      background: var(--ok);
+    }
+
+    .engine-pill.loading .engine-dot {
+      background: var(--boost);
+    }
+
+    .engine-pill.error .engine-dot {
+      background: var(--err);
     }
 
     .install-btn {
@@ -94,8 +123,8 @@
       color: var(--text);
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 8px 12px;
-      font-size: 0.82rem;
+      padding: 6px 10px;
+      font-size: 0.78rem;
       font-weight: 600;
       cursor: pointer;
     }
@@ -107,14 +136,15 @@
       padding: 14px;
     }
 
-    /* 1. File Picker */
-    .picker-label {
+    /* 1. File Picker (native overlay — more reliable on Android Chrome) */
+    .picker-wrap {
+      position: relative;
+      overflow: hidden;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
       width: 100%;
-      min-height: 56px;
+      min-height: 58px;
       padding: 12px 16px;
       background: var(--surface-2);
       border: 1.5px dashed var(--border);
@@ -122,18 +152,22 @@
       color: var(--text);
       font-size: 1rem;
       font-weight: 600;
-      cursor: pointer;
       text-align: center;
-      transition: border-color 0.15s, background 0.15s;
     }
 
-    .picker-label:active {
+    .picker-wrap:active {
       background: #232b3d;
       border-color: var(--accent);
     }
 
     #fileInput {
-      display: none;
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+      font-size: 100px;
     }
 
     .file-meta {
@@ -442,6 +476,62 @@
     .save-again.visible {
       display: flex;
     }
+
+    /* 5. Mobile Debug Panel */
+    details.debug-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+    }
+
+    details.debug-card summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      list-style: none;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    details.debug-card summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .debug-actions {
+      display: flex;
+      gap: 8px;
+      margin: 10px 0 8px;
+    }
+
+    .debug-btn {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .debug-log {
+      margin: 0;
+      padding: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+      background: #080a0f;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.72rem;
+      line-height: 1.45;
+      color: #cbd5e1;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
   </style>
 </head>
 <body>
@@ -449,17 +539,20 @@
     <header>
       <div class="brand">
         <h1>QuickVol</h1>
-        <span class="badge">MP4 · No Video Re-encode</span>
+        <button id="installBtn" class="install-btn" type="button">Install</button>
       </div>
-      <button id="installBtn" class="install-btn" type="button">Install App</button>
+      <button id="enginePill" class="engine-pill" type="button" title="Tap to preload FFmpeg engine">
+        <span class="engine-dot"></span>
+        <span id="enginePillText">Checking cache...</span>
+      </button>
     </header>
 
     <!-- 1. File Picker -->
     <section class="card">
-      <label class="picker-label" for="fileInput" id="pickerLabel">
+      <div class="picker-wrap" id="pickerWrap">
         <span id="pickerText">Select MP4 Video</span>
-      </label>
-      <input id="fileInput" type="file" accept="video/mp4,video/*" />
+        <input id="fileInput" type="file" accept="video/mp4,video/*,.mp4" />
+      </div>
       <div class="file-meta" id="fileMeta">
         <span id="fileName"></span>
         <span id="fileInfo"></span>
@@ -523,9 +616,22 @@
       <div class="status-msg" id="statusMsg"></div>
       <a class="save-again" id="saveAgainLink" download>Tap here if download didn't start</a>
     </section>
+
+    <!-- 5. Mobile Debug Console -->
+    <details class="debug-card" id="debugCard">
+      <summary>
+        <span>Status / Debug Log</span>
+        <span id="debugSummary">0 events</span>
+      </summary>
+      <div class="debug-actions">
+        <button class="debug-btn" id="copyLogBtn" type="button">Copy Log</button>
+        <button class="debug-btn" id="clearLogBtn" type="button">Clear</button>
+      </div>
+      <pre class="debug-log" id="debugLog"></pre>
+    </details>
   </main>
 
-  <!-- Inline FFmpeg Web Worker (avoids cross-origin wrapper bugs) -->
+  <!-- Inline FFmpeg Web Worker -->
   <script id="ffmpeg-worker" type="javascript/worker">
     let ffmpeg = null;
 
@@ -559,8 +665,8 @@
           });
 
           ffmpeg.FS.writeFile(inputName, new Uint8Array(inputBuffer));
-          ffmpeg.exec(...args);
-          const ret = ffmpeg.ret;
+          const execRet = ffmpeg.exec(...args);
+          const ret = typeof ffmpeg.ret === 'number' ? ffmpeg.ret : execRet;
           ffmpeg.reset();
 
           if (ret !== 0) {
@@ -570,7 +676,6 @@
           }
 
           const outView = ffmpeg.FS.readFile(outputName);
-          // Copy out of WASM linear memory before unlinking & transferring
           const outCopy = new Uint8Array(outView.byteLength);
           outCopy.set(outView);
 
@@ -616,6 +721,52 @@
       const statusMsg = document.getElementById('statusMsg');
       const saveAgainLink = document.getElementById('saveAgainLink');
       const installBtn = document.getElementById('installBtn');
+      const enginePill = document.getElementById('enginePill');
+      const enginePillText = document.getElementById('enginePillText');
+      const debugCard = document.getElementById('debugCard');
+      const debugSummary = document.getElementById('debugSummary');
+      const debugLogEl = document.getElementById('debugLog');
+      const copyLogBtn = document.getElementById('copyLogBtn');
+      const clearLogBtn = document.getElementById('clearLogBtn');
+
+      // --- On-screen Mobile Logger ---
+      const logLines = [];
+      function log(msg, isErr = false) {
+        const now = new Date();
+        const ts = now.toTimeString().slice(0, 8);
+        const line = `[${ts}] ${isErr ? 'ERR: ' : ''}${msg}`;
+        logLines.push(line);
+        if (logLines.length > 80) logLines.shift();
+        debugLogEl.textContent = logLines.join('\n');
+        debugLogEl.scrollTop = debugLogEl.scrollHeight;
+        debugSummary.textContent = `${logLines.length} events${isErr ? ' (error)' : ''}`;
+        if (isErr) debugCard.open = true;
+      }
+
+      window.addEventListener('error', (e) => {
+        log(`JS Error: ${e.message} (line ${e.lineno})`, true);
+      });
+      window.addEventListener('unhandledrejection', (e) => {
+        log(`Promise Error: ${e.reason && e.reason.message ? e.reason.message : e.reason}`, true);
+      });
+
+      copyLogBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(logLines.join('\n'));
+          copyLogBtn.textContent = 'Copied!';
+          setTimeout(() => (copyLogBtn.textContent = 'Copy Log'), 1200);
+        } catch (_) {
+          copyLogBtn.textContent = 'Copy failed';
+        }
+      });
+
+      clearLogBtn.addEventListener('click', () => {
+        logLines.length = 0;
+        debugLogEl.textContent = '';
+        debugSummary.textContent = '0 events';
+      });
+
+      log(`QuickVol v2 ready · origin=${location.origin}`);
 
       // State
       let currentFile = null;
@@ -635,9 +786,56 @@
       let workerReady = false;
       let workerInitPromise = null;
 
+      function setEnginePill(state, text) {
+        enginePill.className = 'engine-pill ' + state;
+        enginePillText.textContent = text;
+      }
+
+      async function checkWasmCache() {
+        if (!('caches' in window)) {
+          setEnginePill('', 'Engine: No Cache API');
+          log('CacheStorage unavailable on this origin');
+          return;
+        }
+        try {
+          const cache = await caches.open(WASM_CACHE_NAME);
+          const [jsHit, wasmHit] = await Promise.all([
+            cache.match(CORE_JS_URL),
+            cache.match(CORE_WASM_URL)
+          ]);
+          if (jsHit && wasmHit) {
+            setEnginePill('cached', 'Engine: Cached');
+            log('FFmpeg WASM found in CacheStorage (offline ready)');
+          } else {
+            setEnginePill('', 'Engine: Tap to preload');
+            log('FFmpeg WASM not cached yet (~31 MB on first load)');
+          }
+        } catch (err) {
+          setEnginePill('error', 'Cache check failed');
+          log('Cache check error: ' + err.message, true);
+        }
+      }
+
+      enginePill.addEventListener('click', async () => {
+        if (workerReady || isExporting) return;
+        try {
+          await initWorker();
+          setProgress('FFmpeg engine ready!', 1);
+          setTimeout(() => {
+            if (!isExporting) progressBox.classList.remove('visible');
+          }, 1200);
+        } catch (err) {
+          statusMsg.textContent = err && err.message ? err.message : 'Engine load failed.';
+          statusMsg.className = 'status-msg visible err';
+          log('Preload failed: ' + statusMsg.textContent, true);
+        }
+      });
+
       // --- PWA Registration & Install Prompt ---
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./sw.js').catch(() => {});
+        navigator.serviceWorker.register('./sw.js')
+          .then(() => log('Service Worker registered'))
+          .catch((e) => log('SW register skipped: ' + e.message));
       }
 
       let deferredPrompt = null;
@@ -645,6 +843,7 @@
         e.preventDefault();
         deferredPrompt = e;
         installBtn.style.display = 'inline-block';
+        log('PWA install prompt available');
       });
 
       installBtn.addEventListener('click', async () => {
@@ -680,26 +879,30 @@
 
       // --- Web Audio Live Preview ---
       function ensureAudioGraph() {
-        if (!audioCtx) {
-          const AudioCtx = window.AudioContext || window.webkitAudioContext;
-          audioCtx = new AudioCtx();
-          sourceNode = audioCtx.createMediaElementSource(videoEl);
-          gainNode = audioCtx.createGain();
+        try {
+          if (!audioCtx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioCtx();
+            sourceNode = audioCtx.createMediaElementSource(videoEl);
+            gainNode = audioCtx.createGain();
 
-          // Soft-knee anti-clip limiter matching FFmpeg alimiter behavior
-          limiterNode = audioCtx.createDynamicsCompressor();
-          limiterNode.threshold.value = -2;
-          limiterNode.knee.value = 6;
-          limiterNode.ratio.value = 20;
-          limiterNode.attack.value = 0.003;
-          limiterNode.release.value = 0.05;
+            limiterNode = audioCtx.createDynamicsCompressor();
+            limiterNode.threshold.value = -2;
+            limiterNode.knee.value = 6;
+            limiterNode.ratio.value = 20;
+            limiterNode.attack.value = 0.003;
+            limiterNode.release.value = 0.05;
 
-          sourceNode.connect(gainNode);
+            sourceNode.connect(gainNode);
+            log('Web Audio graph initialized');
+          }
+          if (audioCtx.state === 'suspended') {
+            audioCtx.resume().catch((e) => log('AudioContext resume err: ' + e.message, true));
+          }
+          applyAudioSettings();
+        } catch (err) {
+          log('Web Audio init failed: ' + err.message, true);
         }
-        if (audioCtx.state === 'suspended') {
-          audioCtx.resume().catch(() => {});
-        }
-        applyAudioSettings();
       }
 
       function applyAudioSettings() {
@@ -744,4 +947,329 @@
       // --- File Selection ---
       function formatBytes(bytes) {
         if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
-    
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      }
+
+      function formatTime(sec) {
+        if (!isFinite(sec) || sec <= 0) return '';
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return m + ':' + String(s).padStart(2, '0');
+      }
+
+      function clearStatus() {
+        statusMsg.className = 'status-msg';
+        statusMsg.textContent = '';
+        saveAgainLink.classList.remove('visible');
+      }
+
+      fileInput.addEventListener('click', () => {
+        fileInput.value = '';
+        log('File picker opened');
+      });
+
+      function handleSelectedFile(file) {
+        if (!file) {
+          log('Picker closed with no file selected');
+          return;
+        }
+        log(`File selected: ${file.name} (${formatBytes(file.size)}, type=${file.type || 'unknown'})`);
+
+        currentFile = file;
+        videoDuration = 0;
+        clearStatus();
+        progressBox.classList.remove('visible');
+        durationWarn.classList.remove('visible');
+
+        if (currentVideoUrl) URL.revokeObjectURL(currentVideoUrl);
+        currentVideoUrl = URL.createObjectURL(file);
+
+        videoEl.src = currentVideoUrl;
+        videoEl.load();
+        playerCard.classList.add('visible');
+
+        pickerText.textContent = 'Change Video';
+        fileNameEl.textContent = file.name;
+        fileInfoEl.textContent = formatBytes(file.size);
+        fileMeta.classList.add('visible');
+        exportBtn.disabled = false;
+      }
+
+      fileInput.addEventListener('change', () => {
+        const file = fileInput.files && fileInput.files[0];
+        handleSelectedFile(file);
+      });
+
+      videoEl.addEventListener('loadedmetadata', () => {
+        videoDuration = videoEl.duration || 0;
+        log(`Video metadata loaded: ${videoEl.videoWidth}x${videoEl.videoHeight}, ${videoDuration.toFixed(1)}s`);
+        if (currentFile) {
+          const durStr = formatTime(videoDuration);
+          fileInfoEl.textContent = durStr
+            ? `${durStr} · ${formatBytes(currentFile.size)}`
+            : formatBytes(currentFile.size);
+        }
+        durationWarn.classList.toggle('visible', videoDuration > 60.5);
+      });
+
+      videoEl.addEventListener('error', () => {
+        const err = videoEl.error;
+        const msg = err ? `code=${err.code} ${err.message || ''}` : 'unknown media error';
+        log('Video playback error: ' + msg, true);
+        statusMsg.textContent = 'Preview failed to decode this video format, but Export may still work.';
+        statusMsg.className = 'status-msg visible err';
+      });
+
+      // --- Cached Asset Loader ---
+      async function fetchCachedBlobUrl(url, mime, label, onProgress) {
+        let cache = null;
+        if ('caches' in window) {
+          try { cache = await caches.open(WASM_CACHE_NAME); } catch (_) {}
+        }
+
+        if (cache) {
+          const hit = await cache.match(url);
+          if (hit) {
+            const blob = await hit.blob();
+            log(`Cache HIT: ${label} (${formatBytes(blob.size)})`);
+            if (onProgress) onProgress(1, blob.size, blob.size);
+            return URL.createObjectURL(blob);
+          }
+        }
+
+        log(`Downloading ${label} from CDN...`);
+        const res = await fetch(url, { mode: 'cors' });
+        if (!res.ok) throw new Error(`Failed to fetch ${label} (HTTP ${res.status})`);
+
+        const total = Number(res.headers.get('content-length')) || 0;
+        let blob;
+
+        if (res.body && onProgress) {
+          const reader = res.body.getReader();
+          const chunks = [];
+          let loaded = 0;
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            loaded += value.byteLength;
+            onProgress(total ? Math.min(1, loaded / total) : 0, loaded, total);
+          }
+          blob = new Blob(chunks, { type: mime });
+        } else {
+          blob = new Blob([await res.arrayBuffer()], { type: mime });
+          if (onProgress) onProgress(1, blob.size, blob.size);
+        }
+
+        log(`Downloaded ${label} (${formatBytes(blob.size)})`);
+
+        if (cache) {
+          try {
+            await cache.put(url, new Response(blob, { headers: { 'Content-Type': mime } }));
+            log(`Saved ${label} to CacheStorage`);
+          } catch (e) {
+            log(`Cache save skipped for ${label}: ${e.message}`);
+          }
+        }
+
+        return URL.createObjectURL(blob);
+      }
+
+      // --- FFmpeg Worker Lifecycle ---
+      function setProgress(label, ratio) {
+        const clamped = Math.max(0, Math.min(100, Math.round(ratio * 100)));
+        progressBox.classList.add('visible');
+        progressLabel.textContent = label;
+        progressPct.textContent = clamped + '%';
+        progressFill.style.width = clamped + '%';
+      }
+
+      function initWorker() {
+        if (workerReady) return Promise.resolve();
+        if (workerInitPromise) return workerInitPromise;
+
+        setEnginePill('loading', 'Engine: Loading...');
+        workerInitPromise = (async () => {
+          setProgress('Loading FFmpeg engine...', 0.02);
+
+          const coreJsUrl = await fetchCachedBlobUrl(CORE_JS_URL, 'text/javascript', 'ffmpeg-core.js');
+          const wasmUrl = await fetchCachedBlobUrl(
+            CORE_WASM_URL,
+            'application/wasm',
+            'ffmpeg-core.wasm',
+            (ratio, loaded, total) => {
+              const mb = (loaded / (1024 * 1024)).toFixed(1);
+              const totMb = total ? (total / (1024 * 1024)).toFixed(1) : '30.7';
+              setProgress(`Downloading engine (${mb}/${totMb} MB)...`, ratio * 0.9);
+              setEnginePill('loading', `Downloading ${Math.round(ratio * 100)}%`);
+            }
+          );
+
+          setProgress('Initializing WASM worker...', 0.95);
+          log('Spawning FFmpeg Web Worker...');
+
+          const workerCode = document.getElementById('ffmpeg-worker').textContent;
+          const workerBlobUrl = URL.createObjectURL(
+            new Blob([workerCode], { type: 'text/javascript' })
+          );
+          worker = new Worker(workerBlobUrl);
+
+          await new Promise((resolve, reject) => {
+            const onMsg = (e) => {
+              if (e.data.type === 'READY') {
+                worker.removeEventListener('message', onMsg);
+                workerReady = true;
+                setEnginePill('ready', 'Engine: Ready');
+                log('FFmpeg worker ready');
+                resolve();
+              } else if (e.data.type === 'ERROR') {
+                worker.removeEventListener('message', onMsg);
+                reject(new Error(e.data.message));
+              }
+            };
+            worker.addEventListener('message', onMsg);
+            worker.addEventListener('error', (err) => {
+              reject(new Error('Worker error: ' + (err.message || 'unknown')));
+            }, { once: true });
+            worker.postMessage({ type: 'INIT', coreJsUrl, wasmUrl });
+          });
+        })().catch((err) => {
+          workerInitPromise = null;
+          workerReady = false;
+          setEnginePill('error', 'Engine: Error');
+          if (worker) {
+            worker.terminate();
+            worker = null;
+          }
+          throw err;
+        });
+
+        return workerInitPromise;
+      }
+
+      function getOutputName(originalName) {
+        const dot = originalName.lastIndexOf('.');
+        const base = dot > 0 ? originalName.slice(0, dot) : originalName;
+        return base + '_vol.mp4';
+      }
+
+      // --- Export Handler ---
+      exportBtn.addEventListener('click', async () => {
+        if (!currentFile || isExporting) return;
+        isExporting = true;
+        exportBtn.disabled = true;
+        clearStatus();
+
+        try {
+          await initWorker();
+
+          const pct = Number(volSlider.value);
+          const gain = (pct / 100).toFixed(2);
+          const useLimiter = limiterToggle.checked && pct > 100;
+
+          let args;
+          if (pct === 100) {
+            args = [
+              '-i', 'input.mp4',
+              '-map', '0:v?',
+              '-map', '0:a?',
+              '-map_metadata', '0',
+              '-c', 'copy',
+              '-movflags', '+faststart',
+              'output.mp4'
+            ];
+          } else {
+            const af = useLimiter
+              ? `volume=${gain},alimiter=limit=0.95:attack=5:release=50:level=disabled`
+              : `volume=${gain}`;
+            args = [
+              '-i', 'input.mp4',
+              '-map', '0:v?',
+              '-map', '0:a?',
+              '-map_metadata', '0',
+              '-c:v', 'copy',
+              '-af', af,
+              '-c:a', 'aac',
+              '-b:a', '192k',
+              '-movflags', '+faststart',
+              'output.mp4'
+            ];
+          }
+
+          log(`Exporting at ${pct}% (limiter=${useLimiter})`);
+          setProgress('Reading video...', 0.05);
+          const inputBuffer = await currentFile.arrayBuffer();
+
+          setProgress('Processing audio...', 0.1);
+          const outBuffer = await new Promise((resolve, reject) => {
+            const onMsg = (e) => {
+              const msg = e.data;
+              if (msg.type === 'PROGRESS') {
+                let ratio = 0;
+                if (msg.time > 0 && videoDuration > 0) {
+                  ratio = (msg.time / 1e6) / videoDuration;
+                } else if (typeof msg.progress === 'number') {
+                  ratio = msg.progress;
+                }
+                setProgress('Processing audio...', 0.1 + Math.max(0, Math.min(0.88, ratio * 0.88)));
+              } else if (msg.type === 'DONE') {
+                worker.removeEventListener('message', onMsg);
+                resolve(msg.buffer);
+              } else if (msg.type === 'ERROR') {
+                worker.removeEventListener('message', onMsg);
+                reject(new Error(msg.message));
+              }
+            };
+            worker.addEventListener('message', onMsg);
+            worker.postMessage(
+              {
+                type: 'RUN',
+                inputBuffer,
+                inputName: 'input.mp4',
+                outputName: 'output.mp4',
+                args
+              },
+              [inputBuffer]
+            );
+          });
+
+          setProgress('Saving file...', 1);
+
+          const outName = getOutputName(currentFile.name);
+          const outBlob = new Blob([outBuffer], { type: 'video/mp4' });
+          log(`Export complete: ${outName} (${formatBytes(outBlob.size)})`);
+
+          if (currentDownloadUrl) URL.revokeObjectURL(currentDownloadUrl);
+          currentDownloadUrl = URL.createObjectURL(outBlob);
+
+          saveAgainLink.href = currentDownloadUrl;
+          saveAgainLink.download = outName;
+          saveAgainLink.classList.add('visible');
+
+          const a = document.createElement('a');
+          a.href = currentDownloadUrl;
+          a.download = outName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+
+          statusMsg.textContent = `Done: ${outName} (${formatBytes(outBlob.size)})`;
+          statusMsg.className = 'status-msg visible ok';
+        } catch (err) {
+          const msg = err && err.message ? err.message : 'Export failed.';
+          log('Export failed: ' + msg, true);
+          statusMsg.textContent = msg;
+          statusMsg.className = 'status-msg visible err';
+        } finally {
+          isExporting = false;
+          exportBtn.disabled = !currentFile;
+        }
+      });
+
+      // Initial render
+      updateSliderUI();
+      checkWasmCache();
+    })();
+  </script>
+</body>
+</html>
