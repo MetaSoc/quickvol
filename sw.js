@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'quickvol-shell-v1.0.4';
+const SHELL_CACHE = 'quickvol-shell-v1.0.5';
 const SHELL_FILES = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (e) => {
