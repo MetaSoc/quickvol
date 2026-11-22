@@ -868,11 +868,11 @@
 
       // --- Volume Mapping & Readouts ---
       // 0%..100%: linear attenuation (50% = -6.0 dB)
-      // 100%..200%: +30 dB per +100% (150% = +15.0 dB / 5.6x, 200% = +30.0 dB / 31.6x)
+      // 100%..200%: +1.2 dB per 5% step (150% = +12.0 dB / 4x, 200% = +24.0 dB / 15.85x)
       function pctToDb(pct) {
         if (pct <= 0) return -Infinity;
         if (pct <= 100) return 20 * Math.log10(pct / 100);
-        return ((pct - 100) / 100) * 30;
+        return ((pct - 100) / 5) * 1.2;
       }
 
       function pctToGain(pct) {
