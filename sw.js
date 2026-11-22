@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'quickvol-shell-v2';
+const SHELL_CACHE = 'quickvol-shell-v1.0.3';
 const SHELL_FILES = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (e) => {
@@ -26,7 +26,6 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Network-first: always pull fresh GitHub Pages updates when online, fallback to cache offline
   e.respondWith(
     fetch(e.request)
       .then((res) => {
