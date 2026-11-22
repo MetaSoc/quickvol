@@ -79,6 +79,16 @@
       font-size: 1.2rem;
       font-weight: 700;
       letter-spacing: -0.02em;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .app-ver {
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: 0;
     }
 
     .engine-pill {
@@ -136,7 +146,7 @@
       padding: 14px;
     }
 
-    /* 1. File Picker (native overlay — more reliable on Android Chrome) */
+    /* 1. File Picker */
     .picker-wrap {
       position: relative;
       overflow: hidden;
@@ -538,7 +548,7 @@
   <main class="app">
     <header>
       <div class="brand">
-        <h1>QuickVol</h1>
+        <h1>QuickVol <span class="app-ver">v1.0.3</span></h1>
         <button id="installBtn" class="install-btn" type="button">Install</button>
       </div>
       <button id="enginePill" class="engine-pill" type="button" title="Tap to preload FFmpeg engine">
@@ -547,11 +557,11 @@
       </button>
     </header>
 
-    <!-- 1. File Picker -->
+    <!-- 1. File Picker (no accept attr so Android opens Files picker & keeps real filenames) -->
     <section class="card">
       <div class="picker-wrap" id="pickerWrap">
         <span id="pickerText">Select MP4 Video</span>
-        <input id="fileInput" type="file" accept="video/mp4,video/*,.mp4" />
+        <input id="fileInput" type="file" />
       </div>
       <div class="file-meta" id="fileMeta">
         <span id="fileName"></span>
@@ -695,6 +705,7 @@
 
   <script>
     (() => {
+      const APP_VERSION = 'v1.0.3';
       const CORE_JS_URL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js';
       const CORE_WASM_URL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm';
       const WASM_CACHE_NAME = 'quickvol-ffmpeg-0.12.10';
@@ -766,7 +777,7 @@
         debugSummary.textContent = '0 events';
       });
 
-      log(`QuickVol v2 ready · origin=${location.origin}`);
+      log(`QuickVol ${APP_VERSION} ready · origin=${location.origin}`);
 
       // State
       let currentFile = null;
@@ -854,11 +865,25 @@
         installBtn.style.display = 'none';
       });
 
-      // --- Volume Readouts & Slider Visuals ---
+      // --- Volume Mapping & Readouts ---
+      // 0%..100%: linear attenuation (50% = -6.0 dB)
+      // 100%..300%: +12 dB per +100% (200% = +12.0 dB / 4x, 300% = +24.0 dB / 15.85x)
+      function pctToDb(pct) {
+        if (pct <= 0) return -Infinity;
+        if (pct <= 100) return 20 * Math.log10(pct / 100);
+        return ((pct - 100) / 100) * 12;
+      }
+
+      function pctToGain(pct) {
+        if (pct <= 0) return 0;
+        if (pct <= 100) return pct / 100;
+        return Math.pow(10, pctToDb(pct) / 20);
+      }
+
       function formatDb(pct) {
         if (pct === 0) return '-∞ dB';
         if (pct === 100) return '0.0 dB';
-        const db = 20 * Math.log10(pct / 100);
+        const db = pctToDb(pct);
         return (db > 0 ? '+' : '') + db.toFixed(1) + ' dB';
       }
 
@@ -908,7 +933,7 @@
       function applyAudioSettings() {
         if (!audioCtx || !gainNode || !limiterNode) return;
         const pct = Number(volSlider.value);
-        const gain = pct / 100;
+        const gain = pctToGain(pct);
         const useLimiter = limiterToggle.checked && pct > 100;
 
         gainNode.gain.setTargetAtTime(gain, audioCtx.currentTime, 0.015);
@@ -980,6 +1005,15 @@
         clearStatus();
         progressBox.classList.remove('visible');
         durationWarn.classList.remove('visible');
+
+        const isLikelyVideo =
+          !file.type ||
+          file.type.startsWith('video/') ||
+          /\.(mp4|m4v|mov|webm|mkv)$/i.test(file.name);
+        if (!isLikelyVideo) {
+          statusMsg.textContent = `Selected file (${file.name}) does not look like a video.`;
+          statusMsg.className = 'status-msg visible err';
+        }
 
         if (currentVideoUrl) URL.revokeObjectURL(currentVideoUrl);
         currentVideoUrl = URL.createObjectURL(file);
@@ -1148,9 +1182,10 @@
       }
 
       function getOutputName(originalName) {
-        const dot = originalName.lastIndexOf('.');
-        const base = dot > 0 ? originalName.slice(0, dot) : originalName;
-        return base + '_vol.mp4';
+        const clean = (originalName || 'video.mp4').replace(/[\\/:*?"<>|]+/g, '_').trim();
+        const dot = clean.lastIndexOf('.');
+        const base = dot > 0 ? clean.slice(0, dot) : clean;
+        return `${base}_vol.mp4`;
       }
 
       // --- Export Handler ---
@@ -1164,7 +1199,8 @@
           await initWorker();
 
           const pct = Number(volSlider.value);
-          const gain = (pct / 100).toFixed(2);
+          const gain = pctToGain(pct);
+          const gainStr = gain.toFixed(4);
           const useLimiter = limiterToggle.checked && pct > 100;
 
           let args;
@@ -1179,9 +1215,10 @@
               'output.mp4'
             ];
           } else {
+            const volFilter = pct === 0 ? 'volume=0' : `volume=${gainStr}:precision=float`;
             const af = useLimiter
-              ? `volume=${gain},alimiter=limit=0.95:attack=5:release=50:level=disabled`
-              : `volume=${gain}`;
+              ? `${volFilter},alimiter=limit=0.95:attack=5:release=50:level=disabled`
+              : volFilter;
             args = [
               '-i', 'input.mp4',
               '-map', '0:v?',
@@ -1196,7 +1233,7 @@
             ];
           }
 
-          log(`Exporting at ${pct}% (limiter=${useLimiter})`);
+          log(`Exporting at ${pct}% (${formatDb(pct)}, gain=${gainStr}x, limiter=${useLimiter})`);
           setProgress('Reading video...', 0.05);
           const inputBuffer = await currentFile.arrayBuffer();
 
