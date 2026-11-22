@@ -1217,11 +1217,11 @@
         return workerInitPromise;
       }
 
-      function getOutputName(originalName) {
+      function getOutputName(originalName, pct) {
         const clean = (originalName || 'video.mp4').replace(/[\\/:*?"<>|]+/g, '_').trim();
         const dot = clean.lastIndexOf('.');
         const base = dot > 0 ? clean.slice(0, dot) : clean;
-        return `${base}_vol.mp4`;
+        return `${base}_vol${pct}.mp4`;
       }
 
       // --- Export Handler ---
@@ -1322,7 +1322,7 @@
 
           setProgress('Saving file...', 1);
 
-          const outName = getOutputName(currentFile.name);
+          const outName = getOutputName(currentFile.name, pct);
           const outBlob = new Blob([outBuffer], { type: 'video/mp4' });
           log(`Export complete: ${outName} (${formatBytes(outBlob.size)})`);
 
